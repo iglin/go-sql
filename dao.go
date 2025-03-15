@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// TxKey is the context key used to store and retrieve transaction objects
 var (
 	// ErrNotFound is returned when an entity cannot be found
 	ErrNotFound = errors.New("gosql: entity not found")
