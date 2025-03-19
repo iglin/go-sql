@@ -16,7 +16,7 @@ GoSQL is a lightweight, type-safe SQL library for Go that provides a clean abstr
 ## Installation
 
 ```bash
-go get github.com/yourusername/gosql
+go get github.com/iglin/go-sql
 ```
 
 ## Core Concepts
