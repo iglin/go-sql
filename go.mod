@@ -1,4 +1,4 @@
-module gitlab.com/iglin/gosql
+module github.com/iglin/go-sql
 
 go 1.24
 
