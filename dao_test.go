@@ -96,15 +96,17 @@ func newDepartmentDao(t *testing.T, db *sql.DB) Dao[*Department] {
 	receive := func(d *Department) []any { return []any{&d.ID, &d.Name, &d.Version} }
 	departmentDao, err := DaoBuilder[*Department]{
 		DB:          db,
-		InsertStmt:  &ExecStmt{BaseStmt: BaseStmt{Query: insertSQL, Cache: false}},
-		UpdateStmt:  &ExecStmt{BaseStmt: BaseStmt{Query: updateSQL, Cache: false}},
-		GetByIdStmt: &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: getByIDSQL, Cache: true}, NewReceiver: newReceiver, Receive: receive},
-		ListAllStmt: &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: listAllSQL, Cache: false}, NewReceiver: newReceiver, Receive: receive},
-		ListAllPageStmt: &QueryPageStmt[*Department]{
-			QueryStmt: &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: listAllPageSQL, Cache: true}, NewReceiver: newReceiver, Receive: receive},
-			CountStmt: &QueryValStmt[int]{BaseStmt: BaseStmt{Query: countAllSQL, Cache: true}},
+		InsertStmt:  &DaoExecStmt{Query: insertSQL, Cache: false},
+		UpdateStmt:  &DaoExecStmt{Query: updateSQL, Cache: false},
+		GetByIdStmt: &DaoQueryOneStmt[*Department]{Query: getByIDSQL, Cache: true},
+		ListAllStmt: &DaoQueryStmt[*Department]{Query: listAllSQL, Cache: false},
+		ListAllPageStmt: &DaoQueryPageStmt[*Department]{
+			QueryStmt: &DaoQueryStmt[*Department]{Query: listAllPageSQL, Cache: true},
+			CountStmt: &DaoQueryValStmt[int]{Query: countAllSQL, Cache: true},
 		},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: deleteByIDSQL, Cache: false}},
+		DeleteByIdStmt: &DaoExecStmt{Query: deleteByIDSQL, Cache: false},
+		NewReceiver:    newReceiver,
+		Receive:        receive,
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.Version, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -137,15 +139,17 @@ func newStudentDao(t *testing.T, db *sql.DB, departmentDao Dao[*Department]) Dao
 	}
 	studentDao, err := DaoBuilder[*Student]{
 		DB:          db,
-		InsertStmt:  &ExecStmt{BaseStmt: BaseStmt{Query: insertSQL, Cache: false}},
-		UpdateStmt:  &ExecStmt{BaseStmt: BaseStmt{Query: updateSQL, Cache: false}},
-		GetByIdStmt: &QueryOneStmt[*Student]{BaseStmt: BaseStmt{Query: getByIDSQL, Cache: true}, NewReceiver: newReceiver, Receive: receive},
-		ListAllStmt: &QueryStmt[*Student]{BaseStmt: BaseStmt{Query: listAllSQL, Cache: false}, NewReceiver: newReceiver, Receive: receive},
-		ListAllPageStmt: &QueryPageStmt[*Student]{
-			QueryStmt: &QueryStmt[*Student]{BaseStmt: BaseStmt{Query: listAllPageSQL, Cache: true}, NewReceiver: newReceiver, Receive: receive},
-			CountStmt: &QueryValStmt[int]{BaseStmt: BaseStmt{Query: countAllSQL, Cache: true}},
+		InsertStmt:  &DaoExecStmt{Query: insertSQL, Cache: false},
+		UpdateStmt:  &DaoExecStmt{Query: updateSQL, Cache: false},
+		GetByIdStmt: &DaoQueryOneStmt[*Student]{Query: getByIDSQL, Cache: true},
+		ListAllStmt: &DaoQueryStmt[*Student]{Query: listAllSQL, Cache: false},
+		ListAllPageStmt: &DaoQueryPageStmt[*Student]{
+			QueryStmt: &DaoQueryStmt[*Student]{Query: listAllPageSQL, Cache: true},
+			CountStmt: &DaoQueryValStmt[int]{Query: countAllSQL, Cache: true},
 		},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: deleteByIDSQL, Cache: false}},
+		DeleteByIdStmt: &DaoExecStmt{Query: deleteByIDSQL, Cache: false},
+		NewReceiver:    newReceiver,
+		Receive:        receive,
 		InsertArgs:     func(s *Student) []any { return []any{s.ID, s.Name, s.Department.ID, s.Version} },
 		UpdateArgs:     func(s *Student) []any { return []any{s.Name, s.Department.ID, s.Version, s.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Student) error { return nil },
@@ -584,11 +588,11 @@ func TestDaoBuilderValidate(t *testing.T) {
 
 	// Test missing DB
 	_, err := DaoBuilder[*Department]{
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -603,10 +607,10 @@ func TestDaoBuilderValidate(t *testing.T) {
 	// Test missing InsertStmt
 	_, err = DaoBuilder[*Department]{
 		DB:             db,
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -621,10 +625,10 @@ func TestDaoBuilderValidate(t *testing.T) {
 	// Test missing UpdateStmt
 	_, err = DaoBuilder[*Department]{
 		DB:             db,
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -639,10 +643,10 @@ func TestDaoBuilderValidate(t *testing.T) {
 	// Test missing GetByIdStmt
 	_, err = DaoBuilder[*Department]{
 		DB:             db,
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -657,10 +661,10 @@ func TestDaoBuilderValidate(t *testing.T) {
 	// Test missing ListAllStmt
 	_, err = DaoBuilder[*Department]{
 		DB:             db,
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -675,10 +679,10 @@ func TestDaoBuilderValidate(t *testing.T) {
 	// Test missing DeleteByIdStmt
 	_, err = DaoBuilder[*Department]{
 		DB:             db,
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -693,11 +697,11 @@ func TestDaoBuilderValidate(t *testing.T) {
 	// Test missing InsertArgs
 	_, err = DaoBuilder[*Department]{
 		DB:             db,
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
 		LoadChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -711,11 +715,11 @@ func TestDaoBuilderValidate(t *testing.T) {
 	// Test missing UpdateArgs
 	_, err = DaoBuilder[*Department]{
 		DB:             db,
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
 		LoadChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -729,11 +733,11 @@ func TestDaoBuilderValidate(t *testing.T) {
 	// Test missing SaveChildren
 	_, err = DaoBuilder[*Department]{
 		DB:             db,
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		LoadChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -747,11 +751,11 @@ func TestDaoBuilderValidate(t *testing.T) {
 	// Test missing LoadChildren
 	_, err = DaoBuilder[*Department]{
 		DB:             db,
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -765,11 +769,11 @@ func TestDaoBuilderValidate(t *testing.T) {
 	// Test missing DeleteChildren
 	_, err = DaoBuilder[*Department]{
 		DB:             db,
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -786,11 +790,11 @@ func TestDaoBuilderValidate(t *testing.T) {
 
 	_, err = DaoBuilder[*Department]{
 		DB:             db,
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}, NewReceiver: newReceiver, Receive: receive},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}, NewReceiver: newReceiver, Receive: receive},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
@@ -804,16 +808,64 @@ func TestDaoBuilderValidate(t *testing.T) {
 
 	_, err = DaoBuilder[*Department]{
 		DB: db,
-		ListAllPageStmt: &QueryPageStmt[*Department]{
-			QueryStmt: &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}, NewReceiver: newReceiver, Receive: receive},
-			CountStmt: &QueryValStmt[int]{BaseStmt: BaseStmt{Query: "SELECT COUNT(*) FROM departments", Cache: true}},
+		ListAllPageStmt: &DaoQueryPageStmt[*Department]{
+			QueryStmt: &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+			CountStmt: &DaoQueryValStmt[int]{Query: "SELECT COUNT(*) FROM departments", Cache: true},
 		},
-		InsertStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false}},
-		UpdateStmt:     &ExecStmt{BaseStmt: BaseStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false}},
-		GetByIdStmt:    &QueryOneStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments WHERE id = ?", Cache: true}, NewReceiver: newReceiver, Receive: receive},
-		ListAllStmt:    &QueryStmt[*Department]{BaseStmt: BaseStmt{Query: "SELECT * FROM departments", Cache: false}, NewReceiver: newReceiver, Receive: receive},
-		DeleteByIdStmt: &ExecStmt{BaseStmt: BaseStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false}},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
 		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
+		Receive:        receive,
+		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
+		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
+		LoadChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
+		DeleteChildren: func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
+	}.Build(ctx)
+
+	if err == nil {
+		t.Errorf("Expected builder error on missing newReceiver, got nil")
+	}
+
+	_, err = DaoBuilder[*Department]{
+		DB: db,
+		ListAllPageStmt: &DaoQueryPageStmt[*Department]{
+			QueryStmt: &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+			CountStmt: &DaoQueryValStmt[int]{Query: "SELECT COUNT(*) FROM departments", Cache: true},
+		},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
+		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
+		NewReceiver:    newReceiver,
+		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
+		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
+		LoadChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
+		DeleteChildren: func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
+	}.Build(ctx)
+
+	if err == nil {
+		t.Errorf("Expected builder error on missing recive, got nil")
+	}
+
+	_, err = DaoBuilder[*Department]{
+		DB: db,
+		ListAllPageStmt: &DaoQueryPageStmt[*Department]{
+			QueryStmt: &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+			CountStmt: &DaoQueryValStmt[int]{Query: "SELECT COUNT(*) FROM departments", Cache: true},
+		},
+		InsertStmt:     &DaoExecStmt{Query: "INSERT INTO departments VALUES (?, ?, ?)", Cache: false},
+		UpdateStmt:     &DaoExecStmt{Query: "UPDATE departments SET name = ? WHERE id = ?", Cache: false},
+		GetByIdStmt:    &DaoQueryOneStmt[*Department]{Query: "SELECT * FROM departments WHERE id = ?", Cache: true},
+		ListAllStmt:    &DaoQueryStmt[*Department]{Query: "SELECT * FROM departments", Cache: false},
+		DeleteByIdStmt: &DaoExecStmt{Query: "DELETE FROM departments WHERE id = ?", Cache: false},
+		InsertArgs:     func(d *Department) []any { return []any{d.ID, d.Name, d.Version} },
+		NewReceiver:    newReceiver,
+		Receive:        receive,
 		UpdateArgs:     func(d *Department) []any { return []any{d.Name, d.ID} },
 		SaveChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },
 		LoadChildren:   func(ctx context.Context, tx *sql.Tx, e *Department) error { return nil },

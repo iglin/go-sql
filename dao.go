@@ -90,17 +90,21 @@ type DaoBuilder[T Entity] struct {
 	//DB: SQL database connection to use for all operations
 	DB *sql.DB
 	//InsertStmt: Statement for inserting new entities
-	InsertStmt *ExecStmt
+	InsertStmt *DaoExecStmt
 	//UpdateStmt: Statement for updating existing entities
-	UpdateStmt *ExecStmt
+	UpdateStmt *DaoExecStmt
 	//GetByIdStmt: Statement for retrieving a single entity by ID
-	GetByIdStmt *QueryOneStmt[T]
+	GetByIdStmt *DaoQueryOneStmt[T]
 	//ListAllStmt: Statement for retrieving all entities
-	ListAllStmt *QueryStmt[T]
+	ListAllStmt *DaoQueryStmt[T]
 	//ListAllPageStmt: Statement for retrieving paginated results of all entities
-	ListAllPageStmt *QueryPageStmt[T]
+	ListAllPageStmt *DaoQueryPageStmt[T]
 	//DeleteByIdStmt: Statement for deleting entity by its ID
-	DeleteByIdStmt *ExecStmt
+	DeleteByIdStmt *DaoExecStmt
+	//NewReceiver: Function that returns a new instance of the entity
+	NewReceiver func() T
+	//Receive: Function that returns the arguments for the update statement for a given entity
+	Receive func(T) []any
 	//InsertArgs: Function that returns the arguments for the insert statement for a given entity
 	InsertArgs func(T) []any
 	//UpdateArgs: Function that returns the arguments for the update statement for a given entity
@@ -119,12 +123,12 @@ func (b DaoBuilder[T]) Build(ctx context.Context) (Dao[T], error) {
 	}
 	return &genericDao[T]{
 		db:              b.DB,
-		insertStmt:      b.InsertStmt,
-		updateStmt:      b.UpdateStmt,
-		getByIdStmt:     b.GetByIdStmt,
-		listAllStmt:     b.ListAllStmt,
-		listAllPageStmt: b.ListAllPageStmt,
-		deleteByIdStmt:  b.DeleteByIdStmt,
+		insertStmt:      b.InsertStmt.ToStmt(),
+		updateStmt:      b.UpdateStmt.ToStmt(),
+		getByIdStmt:     b.GetByIdStmt.ToStmt(b.NewReceiver, b.Receive),
+		listAllStmt:     b.ListAllStmt.ToStmt(b.NewReceiver, b.Receive),
+		listAllPageStmt: b.ListAllPageStmt.ToStmt(b.NewReceiver, b.Receive),
+		deleteByIdStmt:  b.DeleteByIdStmt.ToStmt(),
 		insertArgs:      b.InsertArgs,
 		updateArgs:      b.UpdateArgs,
 		saveChildren:    b.SaveChildren,
@@ -142,13 +146,25 @@ func (b DaoBuilder[T]) validate(ctx context.Context) error {
 		slog.ErrorContext(ctx, "insertStmt is nil")
 		return errors.New("gosql: insertStmt is nil")
 	}
+	if b.InsertStmt.Query == "" {
+		slog.ErrorContext(ctx, "insertStmt.Query is empty")
+		return errors.New("gosql: insertStmt.Query is empty")
+	}
 	if b.UpdateStmt == nil {
 		slog.ErrorContext(ctx, "udateStmt is nil")
 		return errors.New("gosql: updateStmt is nil")
 	}
+	if b.UpdateStmt.Query == "" {
+		slog.ErrorContext(ctx, "updateStmt.Query is empty")
+		return errors.New("gosql: updateStmt.Query is empty")
+	}
 	if b.GetByIdStmt == nil {
 		slog.ErrorContext(ctx, "getByIdStmt is nil")
 		return errors.New("gosql: getByIdStmt is nil")
+	}
+	if b.GetByIdStmt.Query == "" {
+		slog.ErrorContext(ctx, "getByIdStmt.Query is empty")
+		return errors.New("gosql: getByIdStmt.Query is empty")
 	}
 	if b.ListAllStmt == nil {
 		slog.ErrorContext(ctx, "listAllStmt is nil")
@@ -158,9 +174,29 @@ func (b DaoBuilder[T]) validate(ctx context.Context) error {
 		slog.ErrorContext(ctx, "listAllPageStmt is nil")
 		return errors.New("gosql: listAllPageStmt is nil")
 	}
+	if b.ListAllPageStmt.CountStmt == nil {
+		slog.ErrorContext(ctx, "listAllPageStmt.CountStmt is nil")
+		return errors.New("gosql: listAllPageStmt.CountStmt is nil")
+	}
+	if b.ListAllPageStmt.QueryStmt == nil {
+		slog.ErrorContext(ctx, "listAllPageStmt.QueryStmt is nil")
+		return errors.New("gosql: listAllPageStmt.QueryStmt is nil")
+	}
 	if b.DeleteByIdStmt == nil {
 		slog.ErrorContext(ctx, "deleteByIdStmt is nil")
 		return errors.New("gosql: deleteByIdStmt is nil")
+	}
+	if b.DeleteByIdStmt.Query == "" {
+		slog.ErrorContext(ctx, "deleteByIdStmt.Query is empty")
+		return errors.New("gosql: deleteByIdStmt.Query is empty")
+	}
+	if b.NewReceiver == nil {
+		slog.ErrorContext(ctx, "newReceiver is nil")
+		return errors.New("gosql: newReceiver is nil")
+	}
+	if b.Receive == nil {
+		slog.ErrorContext(ctx, "receive is nil")
+		return errors.New("gosql: receive is nil")
 	}
 	if b.InsertArgs == nil {
 		slog.ErrorContext(ctx, "insertArgs is nil")
