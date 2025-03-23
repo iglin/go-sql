@@ -76,6 +76,8 @@ GoSQL provides several statement types for different query operations:
 - `QueryStmt<T>`: For retrieving multiple entities
 - `QueryPageStmt<T>`: For retrieving paginated results
 
+There are also DAO variants of these types (prefixed with `Dao`) that are used when building DAOs.
+
 ### Pagination
 
 The library includes built-in pagination support:
@@ -117,21 +119,71 @@ type User struct {
 	Email string
 }
 
-// Create a DAO for the User entity
-userDao := gosql.NewDaoBuilder[User]{
-	DB:              db,
-	InsertStmt:      &gosql.ExecStmt{BaseStmt: gosql.BaseStmt{Query: "INSERT INTO users (id, version, name, email) VALUES (?, ?, ?, ?)", Cache: true}},
-	UpdateStmt:      &gosql.ExecStmt{BaseStmt: gosql.BaseStmt{Query: "UPDATE users SET version = ?, name = ?, email = ? WHERE id = ? AND version = ?", Cache: true}},
-	GetByIdStmt:     createGetByIdStmt(),
-	ListAllStmt:     createListAllStmt(),
-	ListAllPageStmt: createListAllPageStmt(),
-	DeleteByIdStmt:  &gosql.ExecStmt{BaseStmt: gosql.BaseStmt{Query: "DELETE FROM users WHERE id = ?", Cache: true}},
-	InsertArgs:      createInsertArgsFunc(),
-	UpdateArgs:      createUpdateArgsFunc(),
-	SaveChildren:    func(ctx context.Context, tx *sql.Tx, e User) error { return nil },
-	LoadChildren:    func(ctx context.Context, tx *sql.Tx, e User) error { return nil },
-	DeleteChildren:  func(ctx context.Context, tx *sql.Tx, e User) error { return nil },
-}.Build()
+// Implement Equals method required by Entity interface
+func (u User) Equals(another any) bool {
+    au, ok := another.(User)
+    if !ok {
+        return false
+    }
+    return u.ID == au.ID && u.Name == au.Name && u.Email == au.Email
+}
+
+// Create DAO statement helpers
+createNewUser := func() User { return User{} }
+receiveUser := func(u User) []any {
+    return []any{&u.ID, &u.Version, &u.Name, &u.Email}
+}
+
+// Create a DAO for the User entity using the builder pattern
+ctx := context.Background()
+userDao, err := gosql.DaoBuilder[User]{
+    DB: db,
+    InsertStmt: &gosql.DaoExecStmt{
+        Query: "INSERT INTO users (id, version, name, email) VALUES (?, ?, ?, ?)",
+        Cache: true,
+    },
+    UpdateStmt: &gosql.DaoExecStmt{
+        Query: "UPDATE users SET version = ?, name = ?, email = ? WHERE id = ? AND version = ?",
+        Cache: true,
+    },
+    GetByIdStmt: &gosql.DaoQueryOneStmt[User]{
+        Query: "SELECT id, version, name, email FROM users WHERE id = ?",
+        Cache: true,
+    },
+    ListAllStmt: &gosql.DaoQueryStmt[User]{
+        Query: "SELECT id, version, name, email FROM users",
+        Cache: true,
+    },
+    ListAllPageStmt: &gosql.DaoQueryPageStmt[User]{
+        CountStmt: &gosql.DaoQueryValStmt[int]{
+            Query: "SELECT COUNT(*) FROM users",
+            Cache: true,
+        },
+        QueryStmt: &gosql.DaoQueryStmt[User]{
+            Query: "SELECT id, version, name, email FROM users LIMIT ? OFFSET ?",
+            Cache: true,
+        },
+    },
+    DeleteByIdStmt: &gosql.DaoExecStmt{
+        Query: "DELETE FROM users WHERE id = ?",
+        Cache: true,
+    },
+    NewReceiver: createNewUser,
+    Receive: receiveUser,
+    InsertArgs: func(u User) []any {
+        return []any{u.ID, u.Version, u.Name, u.Email}
+    },
+    UpdateArgs: func(u User) []any {
+        return []any{u.Version, u.Name, u.Email, u.ID, u.GetVersion()}
+    },
+    SaveChildren: func(ctx context.Context, tx *sql.Tx, e User) error { return nil },
+    LoadChildren: func(ctx context.Context, tx *sql.Tx, e User) error { return nil },
+    DeleteChildren: func(ctx context.Context, tx *sql.Tx, e User) error { return nil },
+}.Build(ctx)
+
+if err != nil {
+    // Handle error
+}
 ```
 
 ### Saving Entities
@@ -158,10 +210,8 @@ stmt := &gosql.QueryOneStmt[User]{
 		Query: "SELECT id, version, name, email FROM users WHERE email = ?",
 		Cache: true,
 	},
-	NewReceiver: func() User { return User{} },
-	Receive: func(u User) []any {
-		return []any{&u.ID, &u.Version, &u.Name, &u.Email}
-	},
+	NewReceiver: createNewUser,
+	Receive: receiveUser,
 }
 user, err := userDao.FindOneByStmt(ctx, stmt, "john@example.com")
 ```
@@ -175,6 +225,17 @@ users, err := userDao.ListAll(ctx)
 // Paginated list
 paging := gosql.Paging{PageNum: 1, PageSize: 10}
 page, err := userDao.ListPage(ctx, paging)
+
+// Custom list query
+stmt := &gosql.QueryStmt[User]{
+    BaseStmt: gosql.BaseStmt{
+        Query: "SELECT id, version, name, email FROM users WHERE name LIKE ?",
+        Cache: true,
+    },
+    NewReceiver: createNewUser,
+    Receive: receiveUser,
+}
+users, err := userDao.ListByStmt(ctx, stmt, "%John%")
 ```
 
 ### Deleting Entities
@@ -233,4 +294,4 @@ Always close DAOs when they're no longer needed:
 ```go
 err := userDao.Close(ctx)
 ```
-
+```
